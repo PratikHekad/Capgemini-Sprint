@@ -72,11 +72,7 @@ pipeline {
         ALLURE_RESULTS = 'target/allure-results'
 
         // Resolve suite XML from the SUITE parameter
-        SUITE_XML = "${
-            params.SUITE == 'smoke'    ? 'src/test/resources/testng-smoke.xml'    :
-            params.SUITE == 'parallel' ? 'src/test/resources/testng-parallel.xml' :
-                                         'src/test/resources/testng.xml'
-        }"
+        SUITE_XML = "${params.SUITE == 'smoke' ? 'src/test/resources/testng-smoke.xml' : params.SUITE == 'parallel' ? 'src/test/resources/testng-parallel.xml' : 'src/test/resources/testng.xml'}"
     }
 
     // ── Triggers ─────────────────────────────────────────────────────────────
