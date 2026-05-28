@@ -9,19 +9,15 @@
 //  3. Smoke Tests   – @smoke tagged scenarios only
 //  4. Full Suite    – all features + PerformanceTest
 //  5. Parallel Run  – 3-thread concurrent execution
-//  6. Allure Report – generate HTML report
+//  6. Reports       – mvn allure:report + publish test results
 //  7. Archive       – screenshots, CSV, HTML reports
-//
-//  NOTE: Credentials (test.email / test.password) are read
-//  directly from src/test/resources/config.properties by the
-//  framework. No Jenkins credential store needed for local runs.
 // ============================================================
 
 pipeline {
 
     agent any
 
-    // ── Build parameters (shown on "Build with Parameters" page) ─────────────
+    // ── Build parameters ──────────────────────────────────────────────────────
     parameters {
         choice(
             name:        'SUITE',
@@ -40,22 +36,17 @@ pipeline {
         )
     }
 
-    // ── Environment ───────────────────────────────────────────────────────────
-    environment {
-        ALLURE_RESULTS = 'target/allure-results'
-    }
-
-    // ── Triggers: nightly full run at 2 AM ───────────────────────────────────
-    triggers {
-        cron('0 2 * * *')
-    }
-
     // ── Options ───────────────────────────────────────────────────────────────
     options {
         buildDiscarder(logRotator(numToKeepStr: '20'))
         timestamps()
         timeout(time: 60, unit: 'MINUTES')
         disableConcurrentBuilds()
+    }
+
+    // ── Triggers: nightly full run at 2 AM ───────────────────────────────────
+    triggers {
+        cron('0 2 * * *')
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -91,7 +82,11 @@ pipeline {
                 bat "mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng-smoke.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -q"
             }
             post {
-                always { echo 'Smoke Tests stage complete.' }
+                always {
+                    // Collect TestNG XML results — same workspace, so this works
+                    junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true)
+                    echo 'Smoke Tests stage complete.'
+                }
             }
         }
 
@@ -108,6 +103,11 @@ pipeline {
                 echo 'Running Full Regression Suite...'
                 bat "mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -q"
             }
+            post {
+                always {
+                    junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true)
+                }
+            }
         }
 
         // ── 5. Parallel Suite ─────────────────────────────────────────────────
@@ -119,18 +119,18 @@ pipeline {
                 echo 'Running Parallel Suite (3 browser threads)...'
                 bat "mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng-parallel.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -q"
             }
+            post {
+                always {
+                    junit(testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true)
+                }
+            }
         }
 
-        // ── 6. Allure Report ──────────────────────────────────────────────────
-        stage('Allure Report') {
+        // ── 6. Generate Allure Report (via Maven plugin — no Jenkins plugin needed)
+        stage('Generate Report') {
             steps {
-                allure([
-                    includeProperties: true,
-                    jdk:               '',
-                    properties:        [],
-                    reportBuildPolicy: 'ALWAYS',
-                    results:           [[path: "${ALLURE_RESULTS}"]]
-                ])
+                echo 'Generating Allure HTML report via Maven...'
+                bat 'mvn allure:report -q'
             }
         }
 
@@ -138,41 +138,29 @@ pipeline {
         stage('Archive Artifacts') {
             steps {
                 archiveArtifacts(
-                    artifacts:         'target/cucumber-reports*.html, target/cucumber-smoke-report*.html, test-output/performance/perf-trend.csv, test-output/screenshots/**',
+                    artifacts:         'target/site/allure-maven-plugin/**, target/cucumber-reports*.html, target/cucumber-smoke-report*.html, test-output/performance/perf-trend.csv, test-output/screenshots/**',
                     allowEmptyArchive: true
                 )
+                echo "Artifacts archived. Allure report: target/site/allure-maven-plugin/index.html"
             }
         }
 
     }
     // ═════════════════════════════════════════════════════════════════════════
 
-    // ── Post-build ────────────────────────────────────────────────────────────
+    // ── Post-build (only echo messages — no file steps to avoid workspace mismatch)
     post {
-
-        always {
-            // junit and bat need an active node/workspace context — wrap in node
-            node('') {
-                junit(
-                    testResults:       'target/surefire-reports/*.xml',
-                    allowEmptyResults: true
-                )
-                bat 'taskkill /F /IM chromedriver.exe 2>nul & exit 0'
-                bat 'taskkill /F /IM chrome.exe 2>nul & exit 0'
-            }
-            echo "Pipeline complete — Build #${env.BUILD_NUMBER}"
-        }
-
         success {
             echo "BUILD SUCCESS - All tests passed on Build #${env.BUILD_NUMBER}"
         }
-
         failure {
-            echo "BUILD FAILED - Check Allure report and console output"
+            echo "BUILD FAILED - Check archived artifacts and console output"
         }
-
         unstable {
-            echo "BUILD UNSTABLE - Some tests failed, check Allure report"
+            echo "BUILD UNSTABLE - Some tests failed, check test results"
+        }
+        always {
+            echo "Pipeline complete — Build #${env.BUILD_NUMBER}"
         }
     }
 }
