@@ -32,12 +32,6 @@ pipeline {
 
     agent any
 
-    // ── Tool versions ────────────────────────────────────────────────────────
-    tools {
-        jdk   'JDK-21'
-        maven 'Maven-3.9'
-    }
-
     // ── Build-level parameters ───────────────────────────────────────────────
     parameters {
         choice(
@@ -97,13 +91,15 @@ pipeline {
             steps {
                 checkout scm
                 echo "Branch: ${env.GIT_BRANCH ?: 'local'} | Build: ${env.BUILD_NUMBER}"
+                bat 'java -version'
+                bat 'mvn -version'
             }
         }
 
         // ── Stage 2: Compile ─────────────────────────────────────────────────
         stage('Compile') {
             steps {
-                sh 'mvn clean compile test-compile -q'
+                bat 'mvn clean compile test-compile -q'
             }
         }
 
@@ -111,27 +107,17 @@ pipeline {
         stage('Smoke Tests') {
             when {
                 anyOf {
-                    // Always run smoke on PRs / feature branches
                     not { branch 'main' }
-                    // Or when explicitly requested
                     expression { params.SUITE == 'smoke' }
                 }
             }
             steps {
-                echo "Running Smoke Suite (testng-smoke.xml) …"
-                sh """
-                    mvn test \
-                        -Dsurefire.suiteXmlFiles=src/test/resources/testng-smoke.xml \
-                        -Dbrowser=${params.BROWSER} \
-                        -Dheadless=${params.HEADLESS} \
-                        -Dtest.email="${TEST_EMAIL}" \
-                        -Dtest.password="${TEST_PASSWORD}" \
-                        -q
-                """
+                echo "Running Smoke Suite (testng-smoke.xml) ..."
+                bat "mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng-smoke.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -Dtest.email=%TEST_EMAIL% -Dtest.password=%TEST_PASSWORD% -q"
             }
             post {
                 always {
-                    echo "Smoke stage complete — collecting results …"
+                    echo "Smoke stage complete — collecting results ..."
                 }
             }
         }
@@ -142,21 +128,12 @@ pipeline {
                 anyOf {
                     branch 'main'
                     expression { params.SUITE == 'full' }
-                    // Nightly trigger is always full
                     triggeredBy 'TimerTrigger'
                 }
             }
             steps {
-                echo "Running Full Suite (testng.xml) …"
-                sh """
-                    mvn test \
-                        -Dsurefire.suiteXmlFiles=src/test/resources/testng.xml \
-                        -Dbrowser=${params.BROWSER} \
-                        -Dheadless=${params.HEADLESS} \
-                        -Dtest.email="${TEST_EMAIL}" \
-                        -Dtest.password="${TEST_PASSWORD}" \
-                        -q
-                """
+                echo "Running Full Suite (testng.xml) ..."
+                bat "mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -Dtest.email=%TEST_EMAIL% -Dtest.password=%TEST_PASSWORD% -q"
             }
         }
 
@@ -166,16 +143,8 @@ pipeline {
                 expression { params.SUITE == 'parallel' }
             }
             steps {
-                echo "Running Parallel Suite (testng-parallel.xml, 3 threads) …"
-                sh """
-                    mvn test \
-                        -Dsurefire.suiteXmlFiles=src/test/resources/testng-parallel.xml \
-                        -Dbrowser=${params.BROWSER} \
-                        -Dheadless=${params.HEADLESS} \
-                        -Dtest.email="${TEST_EMAIL}" \
-                        -Dtest.password="${TEST_PASSWORD}" \
-                        -q
-                """
+                echo "Running Parallel Suite (testng-parallel.xml, 3 threads) ..."
+                bat "mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng-parallel.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -Dtest.email=%TEST_EMAIL% -Dtest.password=%TEST_PASSWORD% -q"
             }
         }
 
@@ -196,7 +165,7 @@ pipeline {
         stage('Archive Artifacts') {
             steps {
                 archiveArtifacts(
-                    artifacts:     'target/cucumber-reports*.html, target/cucumber-smoke-report*.html, test-output/performance/perf-trend.csv, test-output/screenshots/**',
+                    artifacts:         'target/cucumber-reports*.html, target/cucumber-smoke-report*.html, test-output/performance/perf-trend.csv, test-output/screenshots/**',
                     allowEmptyArchive: true
                 )
             }
@@ -209,7 +178,6 @@ pipeline {
     post {
 
         always {
-            // Publish TestNG XML results (shown in Jenkins test trend graph)
             junit(
                 testResults:          'target/surefire-reports/*.xml',
                 allowEmptyResults:    true,
@@ -219,25 +187,21 @@ pipeline {
         }
 
         success {
-            echo "✅ All tests PASSED on build #${env.BUILD_NUMBER}"
+            echo "All tests PASSED on build #${env.BUILD_NUMBER}"
         }
 
         failure {
-            echo "❌ Build FAILED — check Allure report and screenshots"
-            // Uncomment to send email on failure:
-            // mail to: 'team@example.com',
-            //      subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-            //      body: "Check console output at ${env.BUILD_URL}"
+            echo "Build FAILED — check Allure report and screenshots"
         }
 
         unstable {
-            echo "⚠️ Build UNSTABLE — some tests failed (check Allure for details)"
+            echo "Build UNSTABLE — some tests failed (check Allure for details)"
         }
 
         cleanup {
-            // Remove browser processes that may have been left hanging
-            sh 'pkill -f chromedriver || true'
-            sh 'pkill -f chrome || true'
+            // Kill any leftover browser/driver processes on Windows
+            bat 'taskkill /F /IM chromedriver.exe 2>nul || exit 0'
+            bat 'taskkill /F /IM chrome.exe 2>nul || exit 0'
         }
     }
 }
