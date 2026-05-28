@@ -1,0 +1,37 @@
+# ── Maven build output ───────────────────────────────────────────────────────
+target/
+
+# ── IDE files ────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+*.eclipse
+.vscode/
+
+# ── OS files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Test output (generated at runtime) ───────────────────────────────────────
+test-output/
+allure-results/
+allure-report/
+
+# ── Screenshots (generated at runtime) ───────────────────────────────────────
+test-output/screenshots/
+
+# ── Performance CSV (generated at runtime) ───────────────────────────────────
+test-output/performance/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Keep the .github modernize tooling hidden from git tracking ───────────────
+.github/modernize/
+
+# ── Sensitive / local override files ─────────────────────────────────────────
+local.properties
+override.properties

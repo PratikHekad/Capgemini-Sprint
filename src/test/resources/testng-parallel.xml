@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+    testng-parallel.xml — Section 3.1
+    Runs all Cucumber scenarios in parallel at the method level (3 threads).
+    ThreadLocal in DriverManager keeps each thread's browser isolated.
+
+    To run:  mvn test -Dsurefire.suiteXmlFiles=src/test/resources/testng-parallel.xml
+-->
+<suite name="NotesApp Parallel Suite" parallel="methods" thread-count="3" verbose="1">
+
+    <!-- Main Cucumber runner — parallel DataProvider enabled in TestRunner.java -->
+    <test name="All Scenarios - Parallel">
+        <classes>
+            <class name="com.notesapp.runners.TestRunner"/>
+        </classes>
+    </test>
+
+    <!-- Dedicated performance test (pure TestNG, no Cucumber) -->
+    <test name="Performance Tests">
+        <classes>
+            <class name="com.notesapp.tests.performance.PerformanceTest"/>
+        </classes>
+    </test>
+
+</suite>
